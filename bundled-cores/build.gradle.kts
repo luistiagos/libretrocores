@@ -28,42 +28,43 @@ dependencies {
 // ELF binary from the per-core source-of-truth module. It is a no-op on Linux/Mac
 // (where the symlinks resolve correctly) and on Windows checkouts that already
 // have the materialized binaries.
-val materializeNativeLibs = tasks.register("materializeNativeLibs") {
-    group = "build"
-    description = "Repairs broken text-symlink .so stubs in bundled-cores/jniLibs by " +
-        "copying real binaries from per-core lemuroid_core_<name> modules."
+val materializeNativeLibs =
+    tasks.register("materializeNativeLibs") {
+        group = "build"
+        description = "Repairs broken text-symlink .so stubs in bundled-cores/jniLibs by " +
+            "copying real binaries from per-core lemuroid_core_<name> modules."
 
-    val coresRoot = projectDir.parentFile
-    val targetDir = file("src/main/jniLibs")
+        val coresRoot = projectDir.parentFile
+        val targetDir = file("src/main/jniLibs")
 
-    doLast {
-        var copied = 0
-        var skippedExisting = 0
-        coresRoot.listFiles()
-            ?.filter { it.isDirectory && it.name.startsWith("lemuroid_core_") }
-            ?.forEach { coreDir ->
-                val sourceJniLibs = File(coreDir, "src/main/jniLibs")
-                if (!sourceJniLibs.isDirectory) return@forEach
-                sourceJniLibs.walkTopDown()
-                    .filter { it.isFile && it.name.endsWith(".so") }
-                    .forEach { src ->
-                        if (src.length() < 10_000L) return@forEach
-                        val rel = src.relativeTo(sourceJniLibs)
-                        val dst = File(targetDir, rel.path)
-                        if (!dst.exists() || dst.length() < 10_000L) {
-                            dst.parentFile.mkdirs()
-                            src.copyTo(dst, overwrite = true)
-                            copied++
-                        } else {
-                            skippedExisting++
+        doLast {
+            var copied = 0
+            var skippedExisting = 0
+            coresRoot.listFiles()
+                ?.filter { it.isDirectory && it.name.startsWith("lemuroid_core_") }
+                ?.forEach { coreDir ->
+                    val sourceJniLibs = File(coreDir, "src/main/jniLibs")
+                    if (!sourceJniLibs.isDirectory) return@forEach
+                    sourceJniLibs.walkTopDown()
+                        .filter { it.isFile && it.name.endsWith(".so") }
+                        .forEach { src ->
+                            if (src.length() < 10_000L) return@forEach
+                            val rel = src.relativeTo(sourceJniLibs)
+                            val dst = File(targetDir, rel.path)
+                            if (!dst.exists() || dst.length() < 10_000L) {
+                                dst.parentFile.mkdirs()
+                                src.copyTo(dst, overwrite = true)
+                                copied++
+                            } else {
+                                skippedExisting++
+                            }
                         }
-                    }
-            }
-        logger.lifecycle(
-            "materializeNativeLibs: copied=$copied skippedAlreadyMaterialized=$skippedExisting",
-        )
+                }
+            logger.lifecycle(
+                "materializeNativeLibs: copied=$copied skippedAlreadyMaterialized=$skippedExisting",
+            )
+        }
     }
-}
 
 afterEvaluate {
     tasks.matching { it.name == "preBuild" }.configureEach {

@@ -1,0 +1,26 @@
+diff --git a/libretro/libretro.cpp b/libretro/libretro.cpp
+index ee175cf4d..da1baeb7d 100644
+--- a/libretro/libretro.cpp
++++ b/libretro/libretro.cpp
+@@ -1416,8 +1416,19 @@ namespace Libretro
+ 
+    void EmuThreadStart()
+    {
+-      bool wasPaused = emuThreadState == EmuThreadState::PAUSED;
+-      emuThreadState = EmuThreadState::START_REQUESTED;
++      // Lemuroid: backport of upstream 72bd0fa4d3 / b7d4a54a45 / c42a3f070a.
++      // Assigning a new std::thread over a live one calls std::terminate(). That
++      // happened when the emu thread had not yet consumed START_REQUESTED (left by
++      // a previous serialize/unserialize) by the next retro_run or serialize.
++      // Never recreate a live thread, and go straight to RUNNING so a paused
++      // thread resumes and EmuThreadPause/EmuThreadStop never see a transient state.
++      EmuThreadState state = emuThreadState;
++      bool wasPaused = state == EmuThreadState::PAUSED;
++
++      if (state == EmuThreadState::RUNNING || (emuThread.joinable() && !wasPaused))
++         return;
++
++      emuThreadState = EmuThreadState::RUNNING;
+ 
+       if (!wasPaused)
+       {
